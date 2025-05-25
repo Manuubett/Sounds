@@ -10,39 +10,55 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
-  <!-- Bootstrap -->
+  <!-- Bootstrap & Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
   <style>
     body {
       background-color: #f8f9fa;
     }
-    .card-title {
-      font-weight: 600;
-    }
-    .card {
-      border-radius: 0.75rem;
-    }
     .header-bar {
       background-color: #343a40;
       color: white;
-      padding: 1rem 0;
+      padding: 1rem 1.5rem;
       border-radius: 0.5rem;
       margin-bottom: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
-    #test-sound-btn {
-      margin-bottom: 1rem;
+    .notification-icon {
+      position: relative;
+      cursor: pointer;
+    }
+    .notification-badge {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background: red;
+      color: white;
+      font-size: 12px;
+      padding: 2px 6px;
+      border-radius: 50%;
     }
   </style>
 </head>
 <body>
 
-  <div class="container mt-5">
-    <button id="test-sound-btn" class="btn btn-primary">Test Beep Sound</button>
-
-    <div class="text-center header-bar">
-      <h2>Admin Panel: M-PESA Message Verification</h2>
-      <p class="mb-0">Review and approve payment messages in real-time</p>
+  <div class="container mt-4">
+    <div class="header-bar">
+      <div>
+        <h2 class="mb-0">M-PESA Admin Panel</h2>
+        <p class="mb-0">Real-time message verification</p>
+      </div>
+      <div class="notification-icon" onclick="resetNotificationCount()">
+        <i class="fas fa-bell fa-2x"></i>
+        <span id="notification-badge" class="notification-badge d-none">0</span>
+      </div>
     </div>
+
+    <p id="notification-status" class="text-muted mb-3"></p>
     <div id="messages" class="row gy-4"></div>
   </div>
 
@@ -59,64 +75,77 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    const beep = new Audio("https://bettemanuel.github.io/assets/notify.mp3");
+    const beep = new Audio("https://raw.githubusercontent.com/Manuubett/Sounds/0fbb2cd53cb145de712e8060cca7ce65bcb0057e/notify.mp3");
 
-    // Ask for notification permission
-    if ('Notification' in window && Notification.permission !== 'granted') {
-      Notification.requestPermission();
+    let initialized = false;
+    let knownIds = new Set();
+    let newMessageCount = 0;
+
+    const badge = document.getElementById("notification-badge");
+    const statusDisplay = document.getElementById("notification-status");
+
+    if ('Notification' in window) {
+      Notification.requestPermission().then(updateNotificationStatus);
     }
 
-    // Show browser notification
+    function updateNotificationStatus() {
+      const status = Notification.permission;
+      if (status === "granted") {
+        statusDisplay.textContent = "Notifications are enabled.";
+        statusDisplay.classList.add("text-success");
+      } else if (status === "denied") {
+        statusDisplay.textContent = "Notifications are blocked.";
+        statusDisplay.classList.add("text-danger");
+      } else {
+        statusDisplay.textContent = "Notifications not yet enabled.";
+      }
+    }
+
+    function playBeep() {
+      beep.play().catch(e => console.log("Beep error:", e));
+    }
+
     function showNotification(title, body) {
       if (Notification.permission === 'granted') {
         new Notification(title, { body });
       }
     }
 
-    function playBeep() {
-      beep.play().catch(e => console.log("Autoplay blocked or error:", e));
+    function resetNotificationCount() {
+      newMessageCount = 0;
+      badge.classList.add("d-none");
     }
 
-    document.getElementById("test-sound-btn").addEventListener("click", () => {
-      playBeep();
-      showNotification("Test Notification", "Sound is working!");
-    });
-
-    let initialized = false;
-    let knownIds = new Set();
-
-    function formatDate(ms) {
-      return new Date(ms).toLocaleString();
+    function incrementNotificationCount() {
+      newMessageCount++;
+      badge.textContent = newMessageCount;
+      badge.classList.remove("d-none");
     }
 
-    function loadMessages() {
-      db.collection("verifications").orderBy("submittedAt", "desc").onSnapshot(snapshot => {
+    function loadMessages(forceUpdate = false) {
+      db.collection("verifications").orderBy("submittedAt", "desc").get().then(snapshot => {
         const container = document.getElementById("messages");
         container.innerHTML = "";
+
+        const newIds = [];
 
         snapshot.forEach(doc => {
           const data = doc.data();
           const id = doc.id;
-
-          if (!knownIds.has(id) && initialized) {
-            playBeep();
-            showNotification("New Payment Received", `${data.email} - ${data.message}`);
-          }
-
+          const isNew = !knownIds.has(id);
           knownIds.add(id);
 
-          const expiry = data.expiry ? formatDate(data.expiry) : "N/A";
-          const now = Date.now();
-          const expired = data.expiry && now > data.expiry;
+          const expiry = data.expiry ? new Date(data.expiry).toLocaleString() : "N/A";
+          const expired = data.expiry && Date.now() > data.expiry;
 
           const card = document.createElement("div");
           card.className = "col-md-6 col-lg-4";
           card.innerHTML = `
             <div class="card shadow-sm">
               <div class="card-body">
-                <h5 class="card-title mb-2">${data.email}</h5>
-                <p class="card-text"><strong>Message:</strong><br>${data.message}</p>
-                <p><strong>Status:</strong> 
+                <h5 class="card-title">${data.email}</h5>
+                <p><strong>Message:</strong><br>${data.message}</p>
+                <p><strong>Status:</strong>
                   <span class="badge ${data.verified ? (expired ? 'bg-secondary' : 'bg-success') : 'bg-warning text-dark'}">
                     ${data.verified ? (expired ? 'Expired' : 'Verified') : 'Pending'}
                   </span>
@@ -130,9 +159,23 @@
             </div>
           `;
           container.appendChild(card);
+
+          if ((initialized || forceUpdate) && isNew) {
+            newIds.push(id);
+          }
         });
 
-        initialized = true;
+        if ((initialized || forceUpdate) && newIds.length > 0) {
+          const latest = snapshot.docs.find(doc => newIds.includes(doc.id));
+          const latestData = latest?.data();
+          playBeep();
+          incrementNotificationCount();
+          if (latestData) showNotification("New M-PESA Message", `${latestData.email} - ${latestData.message}`);
+        }
+
+        if (!initialized) {
+          initialized = true;
+        }
       });
     }
 
@@ -140,44 +183,30 @@
       db.collection("verifications").doc(id).get().then(doc => {
         const data = doc.data();
         const match = data.message.match(/Ksh\s?(\d+(\.\d+)?)/i);
-        if (!match) {
-          alert("Amount not found in message.");
-          return;
-        }
+        if (!match) return alert("Amount not found.");
 
         const amount = parseInt(match[1]);
-        let minutes = 0;
+        let minutes = {10:1, 50:30, 70:45, 100:60, 150:90}[amount];
+        if (!minutes) return alert("Unsupported amount: " + amount);
 
-        if (amount === 10) minutes = 1;
-        else if (amount === 50) minutes = 30;
-        else if (amount === 70) minutes = 45;
-        else if (amount === 100) minutes = 60;
-        else if (amount === 150) minutes = 90;
-        else {
-          alert("Unsupported amount: " + amount);
-          return;
-        }
-
-        const expiry = Date.now() + minutes * 60 * 1000;
-
-        db.collection("verifications").doc(id).update({
-          verified: true,
-          expiry: expiry
-        }).then(() => {
-          alert(`Verified and access granted for ${minutes} minutes.`);
+        const expiry = Date.now() + minutes * 60000;
+        db.collection("verifications").doc(id).update({ verified: true, expiry }).then(() => {
+          alert(`Verified for ${minutes} minutes.`);
         });
       });
     }
 
     function remove(id) {
-      if (confirm("Are you sure you want to delete this message?")) {
-        db.collection("verifications").doc(id).delete().then(() => {
-          alert("Deleted successfully.");
-        });
+      if (confirm("Delete this message?")) {
+        db.collection("verifications").doc(id).delete().then(() => alert("Deleted."));
       }
     }
 
+    // Load on startup
     loadMessages();
+
+    // Auto-refresh every 15 seconds
+    setInterval(() => loadMessages(true), 15000);
   </script>
 </body>
 </html>
