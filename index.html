@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Admin - M-PESA Verification</title>
 
   <!-- Firebase -->
@@ -11,7 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
   <!-- Bootstrap -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
   <style>
     body {
       background-color: #f8f9fa;
@@ -29,20 +29,22 @@
       border-radius: 0.5rem;
       margin-bottom: 2rem;
     }
+    #test-sound-btn {
+      margin-bottom: 1rem;
+    }
   </style>
 </head>
 <body>
 
   <div class="container mt-5">
+    <button id="test-sound-btn" class="btn btn-primary">Test Beep Sound</button>
+
     <div class="text-center header-bar">
       <h2>Admin Panel: M-PESA Message Verification</h2>
       <p class="mb-0">Review and approve payment messages in real-time</p>
     </div>
     <div id="messages" class="row gy-4"></div>
   </div>
-
-  <!-- Notification Sound -->
-  <audio id="notifSound" src="notify.mp3" preload="auto"></audio>
 
   <script>
     const firebaseConfig = {
@@ -57,21 +59,31 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    const sound = document.getElementById("notifSound");
-    let previousMessageCount = 0;
-    let soundEnabled = false;
+    const beep = new Audio("https://bettemanuel.github.io/assets/notify.mp3");
 
-    // Enable sound after first user interaction
-    document.addEventListener("click", () => {
-      sound.play().then(() => {
-        sound.pause();
-        sound.currentTime = 0;
-        soundEnabled = true;
-        console.log("Notification sound enabled");
-      }).catch(err => {
-        console.log("Sound enable failed:", err.message);
-      });
-    }, { once: true });
+    // Ask for notification permission
+    if ('Notification' in window && Notification.permission !== 'granted') {
+      Notification.requestPermission();
+    }
+
+    // Show browser notification
+    function showNotification(title, body) {
+      if (Notification.permission === 'granted') {
+        new Notification(title, { body });
+      }
+    }
+
+    function playBeep() {
+      beep.play().catch(e => console.log("Autoplay blocked or error:", e));
+    }
+
+    document.getElementById("test-sound-btn").addEventListener("click", () => {
+      playBeep();
+      showNotification("Test Notification", "Sound is working!");
+    });
+
+    let initialized = false;
+    let knownIds = new Set();
 
     function formatDate(ms) {
       return new Date(ms).toLocaleString();
@@ -80,18 +92,19 @@
     function loadMessages() {
       db.collection("verifications").orderBy("submittedAt", "desc").onSnapshot(snapshot => {
         const container = document.getElementById("messages");
-        const newMessageCount = snapshot.size;
-
-        if (soundEnabled && newMessageCount > previousMessageCount && previousMessageCount !== 0) {
-          sound.play().catch(e => console.log("Autoplay blocked:", e));
-        }
-
-        previousMessageCount = newMessageCount;
         container.innerHTML = "";
 
         snapshot.forEach(doc => {
           const data = doc.data();
           const id = doc.id;
+
+          if (!knownIds.has(id) && initialized) {
+            playBeep();
+            showNotification("New Payment Received", `${data.email} - ${data.message}`);
+          }
+
+          knownIds.add(id);
+
           const expiry = data.expiry ? formatDate(data.expiry) : "N/A";
           const now = Date.now();
           const expired = data.expiry && now > data.expiry;
@@ -118,6 +131,8 @@
           `;
           container.appendChild(card);
         });
+
+        initialized = true;
       });
     }
 
