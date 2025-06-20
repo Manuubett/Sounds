@@ -15,16 +15,14 @@
 
   <style>
     .right {
-      background-color: #cce5ff !important; /* Light blue */
+      background-color: #cce5ff !important;
       color: #000;
       font-weight: bold;
-      transition: background-color 0.3s ease;
     }
     .wrong {
-      background-color: #f8d7da !important; /* Light red */
+      background-color: #f8d7da !important;
       color: #000;
       font-weight: bold;
-      transition: background-color 0.3s ease;
     }
     .table-title {
       background-color: #007bff;
@@ -41,7 +39,6 @@
   <div class="container">
     <h1 class="mb-4">Admin - Add Football Predictions</h1>
 
-    <!-- Input Section -->
     <div class="mb-3">
       <label for="tableTitle" class="form-label">Enter Table Title:</label>
       <input type="text" id="tableTitle" class="form-control" placeholder="e.g., Saturday Best Picks">
@@ -54,7 +51,6 @@
 
     <button class="btn btn-primary mb-4" onclick="generateTable()">➕ Generate Table</button>
 
-    <!-- Display Tables -->
     <div id="tablesContainer" class="row gy-4"></div>
   </div>
 
@@ -66,8 +62,7 @@
       projectId: "community-caa4a",
       storageBucket: "community-caa4a.appspot.com",
       messagingSenderId: "51051822203",
-      appId: "1:51051822203:web:0cd43a4e1f23594f0a36de",
-      measurementId: "G-MC69F9YXC3"
+      appId: "1:51051822203:web:0cd43a4e1f23594f0a36de"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
@@ -84,14 +79,14 @@
 
       const rows = Array.from(table.querySelectorAll('tbody tr'));
       const tipsToSave = rows.map(r => {
-        const cells = r.querySelectorAll('td');
+        const inputs = r.querySelectorAll('td input');
         return {
-          matchup: cells[0].textContent.trim(),
-          prediction: cells[1].textContent.trim(),
-          time: cells[2].textContent.trim(),
-          odds: cells[3].textContent.trim(),
-          rating: cells[4].textContent.trim(),
-          result: cells[5].querySelector('select').value
+          matchup: inputs[0].value.trim(),
+          prediction: inputs[1].value.trim(),
+          time: inputs[2].value.trim(),
+          odds: inputs[3].value.trim(),
+          rating: inputs[4].value.trim(),
+          result: r.querySelector('select').value
         };
       });
 
@@ -122,11 +117,17 @@
       const lines = input.split('\n');
       const tips = [];
       for (const line of lines) {
-        const [matchup, prediction, time, odds, rating] = line.split('\t');
-        if (matchup && prediction && time && odds && rating) {
-          tips.push({ matchup, prediction, time, odds, rating, result: "" });
-        }
+        const parts = line.split('\t');
+        const [matchup = '', prediction = '', time = '', odds = '', rating = ''] = parts;
+        tips.push({ matchup, prediction, time, odds, rating, result: "" });
       }
+
+      // Safe time sort (handles missing time)
+      tips.sort((a, b) => {
+        const timeA = (a.time || "").padStart(5, '0');
+        const timeB = (b.time || "").padStart(5, '0');
+        return timeA.localeCompare(timeB);
+      });
 
       db.ref(`tips/${todayKey}/${title}`).set({ tips }).then(() => {
         alert(`"${title}" saved successfully.`);
@@ -184,11 +185,11 @@
         if (tip.result === 'wrong') tr.classList.add('wrong');
 
         tr.innerHTML = `
-          <td>${tip.matchup}</td>
-          <td>${tip.prediction}</td>
-          <td>${tip.time}</td>
-          <td>${tip.odds}</td>
-          <td>${tip.rating}</td>
+          <td><input type="text" class="form-control form-control-sm" value="${tip.matchup || ''}"></td>
+          <td><input type="text" class="form-control form-control-sm" value="${tip.prediction || ''}"></td>
+          <td><input type="text" class="form-control form-control-sm" value="${tip.time || ''}"></td>
+          <td><input type="text" class="form-control form-control-sm" value="${tip.odds || ''}"></td>
+          <td><input type="text" class="form-control form-control-sm" value="${tip.rating || ''}"></td>
           <td>
             <select class="form-select form-select-sm" onchange="updateResult(this)">
               <option value="">--</option>
@@ -208,21 +209,19 @@
     }
 
     function loadSavedTables() {
-  const container = document.getElementById('tablesContainer');
-  container.innerHTML = "";
+      const container = document.getElementById('tablesContainer');
+      container.innerHTML = "";
 
-  db.ref(`tips/${todayKey}`).orderByKey().once('value').then(snapshot => {
-    const data = snapshot.val();
-    if (!data) return;
+      db.ref(`tips/${todayKey}`).orderByKey().once('value').then(snapshot => {
+        const data = snapshot.val();
+        if (!data) return;
 
-    // Convert entries to array and reverse to show newest first
-    const entries = Object.entries(data).reverse();
-
-    entries.forEach(([title, entry]) => {
-      if (entry.tips) renderTable(title, entry.tips);
-    });
-  });
-}
+        const entries = Object.entries(data).reverse();
+        entries.forEach(([title, entry]) => {
+          if (entry.tips) renderTable(title, entry.tips);
+        });
+      });
+    }
 
     window.onload = loadSavedTables;
   </script>
