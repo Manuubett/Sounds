@@ -3,210 +3,98 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin - M-PESA Verification</title>
+  <title>Admin Dashboard</title>
 
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-
-  <!-- Bootstrap & Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 
   <style>
     body {
       background-color: #f8f9fa;
     }
-    .header-bar {
-      background-color: #343a40;
-      color: white;
-      padding: 1rem 1.5rem;
-      border-radius: 0.5rem;
+    .card {
+      transition: transform 0.2s ease-in-out;
+    }
+    .card:hover {
+      transform: scale(1.02);
+    }
+    .dashboard-header {
       margin-bottom: 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .notification-icon {
-      position: relative;
-      cursor: pointer;
-    }
-    .notification-badge {
-      position: absolute;
-      top: -8px;
-      right: -8px;
-      background: red;
-      color: white;
-      font-size: 12px;
-      padding: 2px 6px;
-      border-radius: 50%;
     }
   </style>
 </head>
 <body>
-
-  <div class="container mt-4">
-    <div class="header-bar">
-      <div>
-        <h2 class="mb-0">M-PESA Admin Panel</h2>
-        <p class="mb-0">Real-time message verification</p>
-      </div>
-      <div class="notification-icon" onclick="resetNotificationCount()">
-        <i class="fas fa-bell fa-2x"></i>
-        <span id="notification-badge" class="notification-badge d-none">0</span>
-      </div>
+  <div class="container py-5">
+    <div class="text-center dashboard-header">
+      <h2><i class="fas fa-user-shield"></i> Admin Dashboard</h2>
+      <p class="text-muted">Access all admin tools from one place</p>
     </div>
 
-    <p id="notification-status" class="text-muted mb-3"></p>
-    <div id="messages" class="row gy-4"></div>
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+      <!-- Admin Page 1 -->
+      <div class="col">
+        <div class="card shadow-sm h-100">
+          <div class="card-body text-center">
+            <i class="fas fa-database fa-2x text-primary mb-3"></i>
+            <h5 class="card-title">Payment Verification</h5>
+            <p class="card-text">Manage and verify user payments submitted through M-Pesa.</p>
+            <a href="admin-payments.html" class="btn btn-outline-primary">Open</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Page 2 -->
+      <div class="col">
+        <div class="card shadow-sm h-100">
+          <div class="card-body text-center">
+            <i class="fas fa-toolbox fa-2x text-success mb-3"></i>
+            <h5 class="card-title">Jack Tool Admin</h5>
+            <p class="card-text">Monitor access and performance of Jack Tool users.</p>
+            <a href="admin-jack.html" class="btn btn-outline-success">Open</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Page 3 -->
+      <div class="col">
+        <div class="card shadow-sm h-100">
+          <div class="card-body text-center">
+            <i class="fas fa-chart-line fa-2x text-warning mb-3"></i>
+            <h5 class="card-title">Real Tool Admin</h5>
+            <p class="card-text">Control and view statistics for Real Tool activity.</p>
+            <a href="admin-real.html" class="btn btn-outline-warning">Open</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Page 4 -->
+      <div class="col">
+        <div class="card shadow-sm h-100">
+          <div class="card-body text-center">
+            <i class="fas fa-futbol fa-2x text-danger mb-3"></i>
+            <h5 class="card-title">Odi Tool Admin</h5>
+            <p class="card-text">User logs and actions for the Odi Tool system.</p>
+            <a href="admin-odi.html" class="btn btn-outline-danger">Open</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Page 5 -->
+      <div class="col">
+        <div class="card shadow-sm h-100">
+          <div class="card-body text-center">
+            <i class="fas fa-bolt fa-2x text-info mb-3"></i>
+            <h5 class="card-title">Betika Tool Admin</h5>
+            <p class="card-text">Access Betika Tool management and session control.</p>
+            <a href="admin-betika.html" class="btn btn-outline-info">Open</a>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyBTmeDxIUhua52KDAoag23q9MuNEOQXYQg",
-      authDomain: "prediction-94bf9.firebaseapp.com",
-      projectId: "prediction-94bf9",
-      storageBucket: "prediction-94bf9.appspot.com",
-      messagingSenderId: "960123689722",
-      appId: "1:960123689722:web:c707337a7b6972a3478743"
-    };
-
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
-    const beep = new Audio("https://raw.githubusercontent.com/Manuubett/Sounds/0fbb2cd53cb145de712e8060cca7ce65bcb0057e/notify.mp3");
-
-    let initialized = false;
-    let knownIds = new Set();
-    let newMessageCount = 0;
-
-    const badge = document.getElementById("notification-badge");
-    const statusDisplay = document.getElementById("notification-status");
-
-    if ('Notification' in window) {
-      Notification.requestPermission().then(updateNotificationStatus);
-    }
-
-    function updateNotificationStatus() {
-      const status = Notification.permission;
-      if (status === "granted") {
-        statusDisplay.textContent = "Notifications are enabled.";
-        statusDisplay.classList.add("text-success");
-      } else if (status === "denied") {
-        statusDisplay.textContent = "Notifications are blocked.";
-        statusDisplay.classList.add("text-danger");
-      } else {
-        statusDisplay.textContent = "Notifications not yet enabled.";
-      }
-    }
-
-    function playBeep() {
-      beep.play().catch(e => console.log("Beep error:", e));
-    }
-
-    function showNotification(title, body) {
-      if (Notification.permission === 'granted') {
-        new Notification(title, { body });
-      }
-    }
-
-    function resetNotificationCount() {
-      newMessageCount = 0;
-      badge.classList.add("d-none");
-    }
-
-    function incrementNotificationCount() {
-      newMessageCount++;
-      badge.textContent = newMessageCount;
-      badge.classList.remove("d-none");
-    }
-
-    function loadMessages(forceUpdate = false) {
-      db.collection("verifications").orderBy("submittedAt", "desc").get().then(snapshot => {
-        const container = document.getElementById("messages");
-        container.innerHTML = "";
-
-        const newIds = [];
-
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          const id = doc.id;
-          const isNew = !knownIds.has(id);
-          knownIds.add(id);
-
-          const expiry = data.expiry ? new Date(data.expiry).toLocaleString() : "N/A";
-          const expired = data.expiry && Date.now() > data.expiry;
-
-          const card = document.createElement("div");
-          card.className = "col-md-6 col-lg-4";
-          card.innerHTML = `
-            <div class="card shadow-sm">
-              <div class="card-body">
-                <h5 class="card-title">${data.email}</h5>
-                <p><strong>Message:</strong><br>${data.message}</p>
-                <p><strong>Status:</strong>
-                  <span class="badge ${data.verified ? (expired ? 'bg-secondary' : 'bg-success') : 'bg-warning text-dark'}">
-                    ${data.verified ? (expired ? 'Expired' : 'Verified') : 'Pending'}
-                  </span>
-                </p>
-                <p><strong>Expiry:</strong> ${expiry}</p>
-                <div class="d-flex justify-content-between">
-                  <button class="btn btn-sm btn-outline-success" onclick="verify('${id}')">Verify</button>
-                  <button class="btn btn-sm btn-outline-danger" onclick="remove('${id}')">Delete</button>
-                </div>
-              </div>
-            </div>
-          `;
-          container.appendChild(card);
-
-          if ((initialized || forceUpdate) && isNew) {
-            newIds.push(id);
-          }
-        });
-
-        if ((initialized || forceUpdate) && newIds.length > 0) {
-          const latest = snapshot.docs.find(doc => newIds.includes(doc.id));
-          const latestData = latest?.data();
-          playBeep();
-          incrementNotificationCount();
-          if (latestData) showNotification("New M-PESA Message", `${latestData.email} - ${latestData.message}`);
-        }
-
-        if (!initialized) {
-          initialized = true;
-        }
-      });
-    }
-
-    function verify(id) {
-      db.collection("verifications").doc(id).get().then(doc => {
-        const data = doc.data();
-        const match = data.message.match(/Ksh\s?(\d+(\.\d+)?)/i);
-        if (!match) return alert("Amount not found.");
-
-        const amount = parseInt(match[1]);
-        let minutes = {10:1, 50:30, 70:45, 100:60, 150:90}[amount];
-        if (!minutes) return alert("Unsupported amount: " + amount);
-
-        const expiry = Date.now() + minutes * 60000;
-        db.collection("verifications").doc(id).update({ verified: true, expiry }).then(() => {
-          alert(`Verified for ${minutes} minutes.`);
-        });
-      });
-    }
-
-    function remove(id) {
-      if (confirm("Delete this message?")) {
-        db.collection("verifications").doc(id).delete().then(() => alert("Deleted."));
-      }
-    }
-
-    // Load on startup
-    loadMessages();
-
-    // Auto-refresh every 15 seconds
-    setInterval(() => loadMessages(true), 15000);
-  </script>
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
-</html>
+  </html>
