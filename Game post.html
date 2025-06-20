@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin - Football Predictions</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+  <style>
+    .right {
+      background-color: #cce5ff !important; /* Light blue */
+      color: #000;
+      font-weight: bold;
+      transition: background-color 0.3s ease;
+    }
+    .wrong {
+      background-color: #f8d7da !important; /* Light red */
+      color: #000;
+      font-weight: bold;
+      transition: background-color 0.3s ease;
+    }
+    .table-title {
+      background-color: #007bff;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 0.25rem;
+      font-weight: bold;
+      margin-bottom: 10px;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body class="bg-light py-4">
+  <div class="container">
+    <h1 class="mb-4">Admin - Add Football Predictions</h1>
+
+    <!-- Input Section -->
+    <div class="mb-3">
+      <label for="tableTitle" class="form-label">Enter Table Title:</label>
+      <input type="text" id="tableTitle" class="form-control" placeholder="e.g., Saturday Best Picks">
+    </div>
+
+    <div class="mb-3">
+      <label for="inputData" class="form-label">Paste Predictions:</label>
+      <textarea id="inputData" class="form-control" placeholder="Match\tPrediction\tTime\tOdds\tRating" rows="6"></textarea>
+    </div>
+
+    <button class="btn btn-primary mb-4" onclick="generateTable()">➕ Generate Table</button>
+
+    <!-- Display Tables -->
+    <div id="tablesContainer" class="row gy-4"></div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAKtfTZ5j3KYvHynIV5vfNKpclbEmrU794",
+      authDomain: "community-caa4a.firebaseapp.com",
+      databaseURL: "https://community-caa4a-default-rtdb.firebaseio.com",
+      projectId: "community-caa4a",
+      storageBucket: "community-caa4a.appspot.com",
+      messagingSenderId: "51051822203",
+      appId: "1:51051822203:web:0cd43a4e1f23594f0a36de",
+      measurementId: "G-MC69F9YXC3"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const todayKey = new Date().toISOString().split('T')[0];
+
+    function updateResult(select) {
+      const row = select.closest('tr');
+      const table = select.closest('table');
+      const tableTitle = table.caption.textContent.trim();
+
+      row.classList.remove('right', 'wrong');
+      if (select.value === 'right') row.classList.add('right');
+      else if (select.value === 'wrong') row.classList.add('wrong');
+
+      const rows = Array.from(table.querySelectorAll('tbody tr'));
+      const tipsToSave = rows.map(r => {
+        const cells = r.querySelectorAll('td');
+        return {
+          matchup: cells[0].textContent.trim(),
+          prediction: cells[1].textContent.trim(),
+          time: cells[2].textContent.trim(),
+          odds: cells[3].textContent.trim(),
+          rating: cells[4].textContent.trim(),
+          result: cells[5].querySelector('select').value
+        };
+      });
+
+      db.ref(`tips/${todayKey}/${tableTitle}`).set({ tips: tipsToSave });
+    }
+
+    function deleteRow(button) {
+      const row = button.closest('tr');
+      row.remove();
+    }
+
+    function deleteTable(title, element) {
+      if (!confirm(`Delete table "${title}"?`)) return;
+      db.ref(`tips/${todayKey}/${title}`).remove().then(() => {
+        element.remove();
+        alert(`"${title}" deleted successfully.`);
+      });
+    }
+
+    function generateTable() {
+      const title = document.getElementById('tableTitle').value.trim();
+      const input = document.getElementById('inputData').value.trim();
+      if (!title || !input) {
+        alert("Please enter both a title and predictions.");
+        return;
+      }
+
+      const lines = input.split('\n');
+      const tips = [];
+      for (const line of lines) {
+        const [matchup, prediction, time, odds, rating] = line.split('\t');
+        if (matchup && prediction && time && odds && rating) {
+          tips.push({ matchup, prediction, time, odds, rating, result: "" });
+        }
+      }
+
+      db.ref(`tips/${todayKey}/${title}`).set({ tips }).then(() => {
+        alert(`"${title}" saved successfully.`);
+        document.getElementById('inputData').value = "";
+        document.getElementById('tableTitle').value = "";
+        loadSavedTables();
+      });
+    }
+
+    function renderTable(title, tips) {
+      const container = document.getElementById('tablesContainer');
+      const col = document.createElement('div');
+      col.className = 'col-12';
+
+      const card = document.createElement('div');
+      card.className = 'card shadow';
+
+      const cardBody = document.createElement('div');
+      cardBody.className = 'card-body';
+
+      const titleHeader = document.createElement('div');
+      titleHeader.className = 'table-title';
+      titleHeader.textContent = title;
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn btn-danger btn-sm float-end';
+      delBtn.textContent = '🗑 Delete Table';
+      delBtn.onclick = () => deleteTable(title, col);
+
+      titleHeader.appendChild(delBtn);
+      cardBody.appendChild(titleHeader);
+
+      const table = document.createElement('table');
+      table.className = 'table table-bordered table-hover mt-3';
+      table.innerHTML = `
+        <caption class="text-center fw-bold">${title}</caption>
+        <thead class="table-dark">
+          <tr>
+            <th>Match</th>
+            <th>Prediction</th>
+            <th>Time</th>
+            <th>Odds</th>
+            <th>Rating</th>
+            <th>Result</th>
+            <th>Delete</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+
+      const tbody = table.querySelector('tbody');
+      tips.forEach(tip => {
+        const tr = document.createElement('tr');
+        if (tip.result === 'right') tr.classList.add('right');
+        if (tip.result === 'wrong') tr.classList.add('wrong');
+
+        tr.innerHTML = `
+          <td>${tip.matchup}</td>
+          <td>${tip.prediction}</td>
+          <td>${tip.time}</td>
+          <td>${tip.odds}</td>
+          <td>${tip.rating}</td>
+          <td>
+            <select class="form-select form-select-sm" onchange="updateResult(this)">
+              <option value="">--</option>
+              <option value="right" ${tip.result === 'right' ? 'selected' : ''}>✔ Right</option>
+              <option value="wrong" ${tip.result === 'wrong' ? 'selected' : ''}>✖ Wrong</option>
+            </select>
+          </td>
+          <td><button class="btn btn-sm btn-outline-danger" onclick="deleteRow(this)">🗑</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      cardBody.appendChild(table);
+      card.appendChild(cardBody);
+      col.appendChild(card);
+      container.appendChild(col);
+    }
+
+    function loadSavedTables() {
+  const container = document.getElementById('tablesContainer');
+  container.innerHTML = "";
+
+  db.ref(`tips/${todayKey}`).orderByKey().once('value').then(snapshot => {
+    const data = snapshot.val();
+    if (!data) return;
+
+    // Convert entries to array and reverse to show newest first
+    const entries = Object.entries(data).reverse();
+
+    entries.forEach(([title, entry]) => {
+      if (entry.tips) renderTable(title, entry.tips);
+    });
+  });
+}
+
+    window.onload = loadSavedTables;
+  </script>
+</body>
+</html>
