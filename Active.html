@@ -2,29 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>MatchDataHub - Admin Panel</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    body { background-color: #f8f9fa; }
+    @media (max-width: 576px) {
+      .badge { font-size: 0.8rem; }
+      h2 { font-size: 1.2rem; }
+    }
+  </style>
 </head>
-<body class="bg-light">
-  <div class="container py-5">
-    <h2 class="mb-4">🛡️ Admin Panel - User Access</h2>
-
-    <!-- User Counters -->
-    <div class="mb-4 d-flex gap-3">
-      <span class="badge bg-success fs-6" id="activeCount">Active Users: 0</span>
-      <span class="badge bg-secondary fs-6" id="disabledCount">Disabled Users: 0</span>
+<body>
+  <div class="container py-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 gap-2">
+      <h2 class="mb-0">🛡️ Admin Panel</h2>
+      <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
+        <span id="activeCount" class="badge bg-success">Active: 0</span>
+        <span id="disabledCount" class="badge bg-danger">Disabled: 0</span>
+        <select id="statusFilter" class="form-select form-select-sm w-auto">
+          <option value="all">All Users</option>
+          <option value="active">Active</option>
+          <option value="disabled">Disabled</option>
+        </select>
+      </div>
     </div>
 
-    <!-- Table -->
     <div class="table-responsive">
-      <table class="table table-bordered table-hover">
+      <table class="table table-bordered align-middle">
         <thead class="table-dark">
           <tr>
             <th>Name</th>
             <th>Status</th>
-            <th>Time Left</th>
-            <th>Toggle Access</th>
+            <th style="min-width: 180px;">Actions</th>
           </tr>
         </thead>
         <tbody id="userTable"></tbody>
@@ -39,121 +49,149 @@
       collection,
       onSnapshot,
       doc,
-      updateDoc
+      updateDoc,
+      deleteDoc,
+      serverTimestamp
     } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDthFB2btT_r6slyX_xa5jeDOX8KDxsmdo",
       authDomain: "store-1d9e8.firebaseapp.com",
       projectId: "store-1d9e8",
-      storageBucket: "store-1d9e8.firebasestorage.app",
+      storageBucket: "store-1d9e8.appspot.com",
       messagingSenderId: "869478006120",
-      appId: "1:869478006120:web:2045cbb98db8a3755e6add",
-      measurementId: "G-3GCBWGCYPG"
+      appId: "1:869478006120:web:2045cbb98db8a3755e6add"
     };
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+
     const userTable = document.getElementById("userTable");
-    const activeCount = document.getElementById("activeCount");
-    const disabledCount = document.getElementById("disabledCount");
-    const timers = {};
+    const statusFilter = document.getElementById("statusFilter");
+    let currentFilter = "all";
+    const MS_12_HOURS = 12 * 60 * 60 * 1000;
 
     function formatTime(ms) {
-      const totalSeconds = Math.floor(ms / 1000);
-      const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
-      const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
-      const seconds = String(totalSeconds % 60).padStart(2, '0');
-      return `${hours}:${minutes}:${seconds}`;
+      const s = Math.floor(ms / 1000);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = s % 60;
+      return `${h}h ${m}m ${sec}s`;
     }
 
-    onSnapshot(collection(db, "public_users"), async snapshot => {
-      userTable.innerHTML = "";
-      for (const key in timers) clearInterval(timers[key]);
-
-      let activeUsers = 0;
-      let disabledUsers = 0;
-      const now = new Date();
-
-      for (const docSnap of snapshot.docs) {
-        const data = docSnap.data();
-        const userRef = doc(db, "public_users", docSnap.id);
-
-        // Auto-disable check
-        if (!data.disabled && data.enabledAt) {
-          const enabledTime = data.enabledAt.toDate();
-          const timeDiff = now - enabledTime;
-          if (timeDiff > 24 * 60 * 60 * 1000) {
-            await updateDoc(userRef, { disabled: true, enabledAt: null });
-            continue;
-          }
+    function startCountdown(button, span, endTime, userId) {
+      function update() {
+        const now = Date.now();
+        const remaining = endTime - now;
+        if (remaining <= 0) {
+          span.textContent = "";
+          button.disabled = false;
+          updateDoc(doc(db, "public_users", userId), { disabled: true });
+          clearInterval(interval);
+        } else {
+          span.textContent = ` (${formatTime(remaining)})`;
         }
+      }
+      update();
+      const interval = setInterval(update, 1000);
+    }
+
+    function renderUsers(users) {
+      userTable.innerHTML = "";
+      let activeCount = 0;
+      let disabledCount = 0;
+      const now = Date.now();
+
+      users.sort((a, b) => {
+        const aTime = a.data.enabledAt?.toMillis?.() || 0;
+        const bTime = b.data.enabledAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
+
+      users.forEach(user => {
+        const data = user.data;
+        const id = user.id;
+        const isActive = !data.disabled;
+
+        if (isActive) activeCount++;
+        else disabledCount++;
+
+        if ((currentFilter === "active" && !isActive) ||
+            (currentFilter === "disabled" && isActive)) return;
 
         const tr = document.createElement("tr");
-        const status = data.disabled ? "❌ Disabled" : "✅ Enabled";
-        const toggleText = data.disabled ? "Enable" : "Disable";
-        const countdownId = `countdown-${docSnap.id}`;
+        const tdName = document.createElement("td");
+        tdName.textContent = data.name || "(No Name)";
+        const tdStatus = document.createElement("td");
+        tdStatus.textContent = isActive ? "✅ Enabled" : "❌ Disabled";
 
-        if (data.disabled) {
-          disabledUsers++;
-        } else {
-          activeUsers++;
+        const tdAction = document.createElement("td");
+        const toggleBtn = document.createElement("button");
+        toggleBtn.className = `btn btn-sm me-2 ${isActive ? "btn-danger" : "btn-success"}`;
+        toggleBtn.textContent = isActive ? "Disable" : "Enable";
+
+        const countdown = document.createElement("span");
+
+        const enabledAt = data.enabledAt?.toMillis?.() || 0;
+        const expireTime = enabledAt + MS_12_HOURS;
+
+        if (isActive && now > expireTime) {
+          updateDoc(doc(db, "public_users", id), { disabled: true });
         }
 
-        tr.innerHTML = `
-          <td>${data.name}</td>
-          <td>${status}</td>
-          <td id="${countdownId}">${data.disabled || !data.enabledAt ? '-' : 'Calculating...'}</td>
-          <td>
-            <button class="btn btn-sm ${data.disabled ? 'btn-success' : 'btn-danger'}"
-              onclick="toggleUser('${docSnap.id}', ${data.disabled})">
-              ${toggleText}
-            </button>
-          </td>
-        `;
+        if (isActive && now < expireTime) {
+          toggleBtn.disabled = true;
+          startCountdown(toggleBtn, countdown, expireTime, id);
+        }
 
+        toggleBtn.onclick = async () => {
+          const ref = doc(db, "public_users", id);
+          if (data.disabled) {
+            await updateDoc(ref, {
+              disabled: false,
+              enabledAt: serverTimestamp()
+            });
+          } else {
+            await updateDoc(ref, { disabled: true });
+          }
+        };
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "btn btn-sm btn-outline-danger";
+        deleteBtn.textContent = "Delete";
+        deleteBtn.onclick = async () => {
+          if (confirm("Are you sure you want to delete this user?")) {
+            await deleteDoc(doc(db, "public_users", id));
+          }
+        };
+
+        tdAction.appendChild(toggleBtn);
+        tdAction.appendChild(countdown);
+        tdAction.appendChild(deleteBtn);
+
+        tr.appendChild(tdName);
+        tr.appendChild(tdStatus);
+        tr.appendChild(tdAction);
         userTable.appendChild(tr);
+      });
 
-        // Countdown timer
-        if (!data.disabled && data.enabledAt) {
-          const targetTime = data.enabledAt.toDate().getTime() + 12 * 60 * 60 * 1000;
+      document.getElementById("activeCount").textContent = `Active: ${activeCount}`;
+      document.getElementById("disabledCount").textContent = `Disabled: ${disabledCount}`;
+    }
 
-          timers[docSnap.id] = setInterval(() => {
-            const now = new Date().getTime();
-            const remaining = targetTime - now;
-            const el = document.getElementById(countdownId);
-            if (el) {
-              if (remaining <= 0) {
-                el.textContent = "Expired";
-                clearInterval(timers[docSnap.id]);
-              } else {
-                el.textContent = formatTime(remaining);
-              }
-            }
-          }, 1000);
-        }
-      }
-
-      // Update counters
-      activeCount.textContent = `Active Users: ${activeUsers}`;
-      disabledCount.textContent = `Disabled Users: ${disabledUsers}`;
+    let latestUsers = [];
+    statusFilter.addEventListener("change", () => {
+      currentFilter = statusFilter.value;
+      renderUsers(latestUsers);
     });
 
-    // Toggle function
-    window.toggleUser = async (userId, currentlyDisabled) => {
-      const userRef = doc(db, "public_users", userId);
-      if (currentlyDisabled) {
-        await updateDoc(userRef, {
-          disabled: false,
-          enabledAt: new Date()
-        });
-      } else {
-        await updateDoc(userRef, {
-          disabled: true,
-          enabledAt: null
-        });
-      }
-    };
+    onSnapshot(collection(db, "public_users"), snapshot => {
+      latestUsers = [];
+      snapshot.forEach(doc => {
+        latestUsers.push({ id: doc.id, data: doc.data() });
+      });
+      renderUsers(latestUsers);
+    });
   </script>
 </body>
 </html>
