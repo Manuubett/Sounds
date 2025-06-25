@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin - Manage Users</title>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <style>
+    .initials-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background-color: #0d6efd;
+      color: #fff;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 10px;
+      text-transform: uppercase;
+    }
+
+    .active-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: green;
+      display: inline-block;
+      margin-right: 6px;
+    }
+
+    .message-preview {
+      font-size: 0.9rem;
+      color: #555;
+    }
+
+    @media (max-width: 576px) {
+      .flex-md-row {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+      }
+
+      .btn-group {
+        width: 100%;
+        margin-top: 10px;
+      }
+    }
+  </style>
+</head>
+<body class="bg-light">
+
+<div class="container py-5">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <h3 class="mb-0">🛠️ Admin Panel</h3>
+    <span class="badge bg-success">Active Users: <span id="activeCount">0</span></span>
+    <div class="btn-group">
+      <button class="btn btn-danger btn-sm" onclick="resetActiveUsers()">🔁 Reset All</button>
+      <button class="btn btn-outline-primary btn-sm" onclick="showAllVisitors()">👁️ Show All Visitors</button>
+    </div>
+  </div>
+
+  <ul id="userList" class="list-group shadow-sm mb-4"></ul>
+
+  <!-- All Visitors Section -->
+  <div id="allVisitorsSection" class="d-none">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0">All Visitors</h5>
+      <div>
+        <input type="checkbox" id="selectAllVisitors" class="form-check-input me-2">
+        <label for="selectAllVisitors" class="form-label mb-0">Select All</label>
+      </div>
+    </div>
+    <div class="d-flex justify-content-end mb-2">
+      <button class="btn btn-danger btn-sm" onclick="deleteSelectedUsers()">🗑️ Delete Selected</button>
+    </div>
+    <ul id="allVisitorsList" class="list-group shadow-sm border rounded"></ul>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="messageModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Send Message to User</h5>
+      </div>
+      <div class="modal-body">
+        <textarea id="userMessageInput" class="form-control" rows="4" placeholder="Type your message..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="submitUserMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTmeDxIUhua52KDAoag23q9MuNEOQXYQg",
+    authDomain: "prediction-94bf9.firebaseapp.com",
+    projectId: "prediction-94bf9",
+    storageBucket: "prediction-94bf9.appspot.com",
+    messagingSenderId: "960123689722",
+    appId: "1:960123689722:web:c707337a7b6972a3478743"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  let selectedUserId = null;
+
+  function getInitials(name) {
+    const clean = name.trim().toUpperCase();
+    return clean.length < 2 ? clean : clean.slice(0, 2);
+  }
+
+  function fetchUsers() {
+    db.collection("active_users").orderBy("lastActiveAt", "desc").onSnapshot(snapshot => {
+      const userList = document.getElementById("userList");
+      const activeCount = document.getElementById("activeCount");
+      userList.innerHTML = "";
+      let count = 0;
+      const now = Date.now();
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const name = data.name || "Anonymous";
+        const isEnabled = data.isEnabled !== false;
+        const message = data.message || "";
+        const lastActive = data.lastActiveAt?.toDate?.().getTime?.() || 0;
+        const isActive = now - lastActive < 60000;
+
+        if (!isActive) return;
+        count++;
+
+        const li = document.createElement("li");
+        li.className = "list-group-item d-flex justify-content-between align-items-center flex-column flex-md-row";
+
+        li.innerHTML = `
+          <div class="d-flex align-items-center mb-2 mb-md-0">
+            <div class="initials-badge">${getInitials(name)}</div>
+            <div>
+              <strong><span class="active-dot"></span>${name}</strong><br/>
+              ${message ? `<div class="message-preview">💬 ${message}</div>` : ""}
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-sm btn-outline-primary" onclick="openMessageModal('${doc.id}')">✉️ Message</button>
+            <button class="btn btn-sm btn-${isEnabled ? 'warning' : 'success'}" onclick="${isEnabled ? `disableUser('${doc.id}')` : `enableUser('${doc.id}')`}">
+              ${isEnabled ? 'Disable' : 'Enable'}
+            </button>
+          </div>
+        `;
+
+        userList.appendChild(li);
+      });
+
+      activeCount.textContent = count;
+    });
+  }
+
+  fetchUsers();
+
+  function openMessageModal(userId) {
+    selectedUserId = userId;
+    document.getElementById("userMessageInput").value = "";
+    const modal = new bootstrap.Modal(document.getElementById("messageModal"));
+    modal.show();
+  }
+
+  function submitUserMessage() {
+    const message = document.getElementById("userMessageInput").value.trim();
+    if (!message || !selectedUserId) return;
+
+    db.collection("active_users").doc(selectedUserId).update({
+      message: message,
+      isEnabled: false
+    }).then(() => {
+      bootstrap.Modal.getInstance(document.getElementById("messageModal")).hide();
+      alert("Message sent and user disabled.");
+    }).catch(err => {
+      console.error("Message failed:", err);
+      alert("Failed to send message.");
+    });
+  }
+
+  function disableUser(userId) {
+    const adminMessage = `
+⚠️ <strong>Account Disabled</strong><br><br>
+Your access has been <span style="color:red;"><strong>disabled</strong></span>.<br><br>
+Please do one of the following to restore access:
+<ul>
+  <li>📞 <strong>Contact Admin</strong> — Support Number: <strong>+254704518130</strong></li>
+  <li>💰 <strong>Complete Your Payment</strong> — Mpesa Number: <strong>+25497612155</strong></li>
+</ul>
+Thank you for your cooperation.
+    `;
+
+    db.collection("active_users").doc(userId).update({
+      isEnabled: false,
+      message: adminMessage
+    }).then(() => {
+      alert("User disabled with message.");
+    }).catch(err => {
+      console.error("Disabling user failed:", err);
+      alert("Failed to disable user.");
+    });
+  }
+
+  function enableUser(userId) {
+    db.collection("active_users").doc(userId).update({
+      isEnabled: true,
+      message: firebase.firestore.FieldValue.delete()
+    }).then(() => {
+      alert("User enabled.");
+    }).catch(err => {
+      console.error("Enable failed:", err);
+    });
+  }
+
+  function resetActiveUsers() {
+    if (!confirm("Are you sure you want to reset all users?")) return;
+
+    db.collection("active_users").get().then(snapshot => {
+      const batch = db.batch();
+      snapshot.forEach(doc => batch.delete(doc.ref));
+      return batch.commit();
+    }).then(() => {
+      alert("All users reset.");
+    }).catch(err => {
+      console.error("Reset failed:", err);
+    });
+  }
+
+  function showAllVisitors() {
+    const section = document.getElementById("allVisitorsSection");
+    const list = document.getElementById("allVisitorsList");
+    const selectAll = document.getElementById("selectAllVisitors");
+    section.classList.remove("d-none");
+    list.innerHTML = "";
+
+    db.collection("active_users").orderBy("lastActiveAt", "desc").get().then(snapshot => {
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const name = data.name || "Anonymous";
+        const lastSeen = data.lastActiveAt?.toDate?.().toLocaleString?.() || "Unknown";
+
+        const li = document.createElement("li");
+        li.className = "list-group-item d-flex justify-content-between align-items-center";
+        li.innerHTML = `
+          <div class="form-check">
+            <input type="checkbox" class="form-check-input visitor-checkbox" data-id="${doc.id}">
+            <label class="form-check-label">${name}</label>
+          </div>
+          <small class="text-muted">${lastSeen}</small>
+        `;
+        list.appendChild(li);
+      });
+
+      selectAll.checked = false;
+    });
+  }
+
+  document.getElementById("selectAllVisitors").addEventListener("change", function () {
+    const checkboxes = document.querySelectorAll(".visitor-checkbox");
+    checkboxes.forEach(cb => cb.checked = this.checked);
+  });
+
+  function deleteSelectedUsers() {
+    const selected = document.querySelectorAll(".visitor-checkbox:checked");
+    if (selected.length === 0) return alert("No users selected.");
+    if (!confirm(`Delete ${selected.length} user(s)?`)) return;
+
+    const batch = db.batch();
+    selected.forEach(cb => {
+      const id = cb.getAttribute("data-id");
+      const ref = db.collection("active_users").doc(id);
+      batch.delete(ref);
+    });
+
+    batch.commit().then(() => {
+      alert("Selected users deleted.");
+      showAllVisitors(); // Refresh
+    }).catch(err => {
+      console.error("Batch delete failed:", err);
+      alert("Failed to delete.");
+    });
+  }
+</script>
+</body>
+</html>
