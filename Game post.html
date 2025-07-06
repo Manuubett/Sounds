@@ -3,41 +3,31 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Admin - Football Predictions</title>
+  <title>Admin – Football Predictions</title>
 
-  <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
   <style>
-    .right {
-      background-color: #cce5ff !important;
-      color: #000;
-      font-weight: bold;
-    }
-    .wrong {
-      background-color: #f8d7da !important;
-      color: #000;
-      font-weight: bold;
-    }
-    .table-title {
-      background-color: #007bff;
-      color: white;
-      padding: 8px 12px;
-      border-radius: 0.25rem;
-      font-weight: bold;
-      margin-bottom: 10px;
-      display: inline-block;
-    }
+    .right  { background:#cce5ff !important; font-weight:bold; }
+    .wrong  { background:#f8d7da !important; font-weight:bold; }
+    .table-title{ background:#007bff; color:#fff; padding:8px 12px; border-radius:.25rem;
+                  font-weight:bold; margin-bottom:10px; display:inline-block; }
+    .watermark-bett{ position:fixed; bottom:16px; right:16px; background:rgba(0,0,0,.07);
+                     backdrop-filter:blur(2px); padding:6px 12px; font-size:1rem; font-weight:600;
+                     text-transform:uppercase; letter-spacing:.5px; border-radius:6px;
+                     pointer-events:none; user-select:none; z-index:0; }
   </style>
 </head>
 <body class="bg-light py-4">
+
+  <div class="watermark-bett">Bett officials</div>
+
   <div class="container">
-    <h1 class="mb-4">Admin - Add Football Predictions</h1>
+    <h1 class="mb-4">Admin – Add Football Predictions</h1>
 
     <div class="mb-3">
       <label for="tableTitle" class="form-label">Enter Table Title:</label>
@@ -46,7 +36,8 @@
 
     <div class="mb-3">
       <label for="inputData" class="form-label">Paste Predictions:</label>
-      <textarea id="inputData" class="form-control" placeholder="Match\tPrediction\tTime\tOdds\tRating" rows="6"></textarea>
+      <textarea id="inputData" class="form-control" rows="6"
+        placeholder="Zenit vs Baltika 1 17:30 1.27&#10;Spartak Moscow vs Krylya Sovetov 1 15:00 1.44"></textarea>
     </div>
 
     <button class="btn btn-primary mb-4" onclick="generateTable()">➕ Generate Table</button>
@@ -54,176 +45,179 @@
     <div id="tablesContainer" class="row gy-4"></div>
   </div>
 
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyAKtfTZ5j3KYvHynIV5vfNKpclbEmrU794",
-      authDomain: "community-caa4a.firebaseapp.com",
-      databaseURL: "https://community-caa4a-default-rtdb.firebaseio.com",
-      projectId: "community-caa4a",
-      storageBucket: "community-caa4a.appspot.com",
-      messagingSenderId: "51051822203",
-      appId: "1:51051822203:web:0cd43a4e1f23594f0a36de"
+<script>
+/* ---------- Firebase ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyAKtfTZ5j3KYvHynIV5vfNKpclbEmrU794",
+  authDomain: "community-caa4a.firebaseapp.com",
+  databaseURL: "https://community-caa4a-default-rtdb.firebaseio.com",
+  projectId: "community-caa4a",
+  storageBucket: "community-caa4a.appspot.com",
+  messagingSenderId: "51051822203",
+  appId: "1:51051822203:web:0cd43a4e1f23594f0a36de"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const todayKey = new Date().toISOString().split('T')[0];
+
+/* ---------- helpers ---------- */
+function parseLine(line) {
+  if (!line.trim()) return null;
+  const raw = line.includes('\t') ? line.split('\t') : line.trim().split(/\s+/);
+  const odds = raw.pop();
+  if (!/^\d+(\.\d+)?$/.test(odds)) return null;
+  let time = "", tip = "";
+  if (raw.length && /^\d{1,2}:\d{2}$/.test(raw[raw.length - 1])) time = raw.pop();
+  if (raw.length && /^[A-Za-z0-9.]+$/.test(raw[raw.length - 1])) {
+    tip = raw.pop();
+    if (!raw.length) { raw.push(tip); tip = ""; }
+  }
+  return { matchup: raw.join(" "), prediction: tip, time, odds, result: "" };
+}
+function saveTable(tableEl, title) {
+  const rows = [...tableEl.querySelectorAll('tbody tr')];
+  const tips = rows.map(r => {
+    const i = r.querySelectorAll('td input[type="text"]');
+    const right = r.querySelector('input[data-value="right"]').checked;
+    const wrong = r.querySelector('input[data-value="wrong"]').checked;
+    return {
+      matchup: i[0].value.trim(),
+      prediction: i[1].value.trim(),
+      time: i[2].value.trim(),
+      odds: i[3].value.trim(),
+      result: right ? "right" : wrong ? "wrong" : ""
     };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    const todayKey = new Date().toISOString().split('T')[0];
+  });
+  db.ref(`tips/${todayKey}/${title}`).set({ tips });
+}
+function updateCheckboxResult(cb) {
+  const row = cb.closest('tr');
+  const table = cb.closest('table');
+  const title = table.caption.textContent.trim();
+  const rightBox = row.querySelector('input[data-value="right"]');
+  const wrongBox = row.querySelector('input[data-value="wrong"]');
+  if (cb === rightBox && cb.checked) wrongBox.checked = false;
+  if (cb === wrongBox && cb.checked) rightBox.checked = false;
+  row.classList.remove('right', 'wrong');
+  if (rightBox.checked) row.classList.add('right');
+  else if (wrongBox.checked) row.classList.add('wrong');
+  saveTable(table, title);
+}
+const deleteRow = btn => btn.closest('tr').remove();
+function deleteTable(title, col) {
+  if (!confirm(`Delete table "${title}"?`)) return;
+  db.ref(`tips/${todayKey}/${title}`).remove().then(() => col.remove());
+}
 
-    function updateResult(select) {
-      const row = select.closest('tr');
-      const table = select.closest('table');
-      const tableTitle = table.caption.textContent.trim();
+/* ---------- build new table ---------- */
+function generateTable() {
+  const title = document.getElementById('tableTitle').value.trim();
+  const input = document.getElementById('inputData').value.trim();
+  if (!title || !input) { alert("Please enter both a title and predictions."); return; }
+  const tips = [];
+  input.split('\n').forEach(l => { const o = parseLine(l); if (o) tips.push(o); });
+  if (!tips.length) { alert("Couldn't detect Odds & Time in what you pasted."); return; }
+  tips.sort((a, b) => a.time.padStart(5, "0").localeCompare(b.time.padStart(5, "0")));
+  db.ref(`tips/${todayKey}/${title}`).set({ tips }).then(() => {
+    document.getElementById('inputData').value = "";
+    document.getElementById('tableTitle').value = "";
+    loadSavedTables();
+  });
+}
 
-      row.classList.remove('right', 'wrong');
-      if (select.value === 'right') row.classList.add('right');
-      else if (select.value === 'wrong') row.classList.add('wrong');
+/* ---------- render ---------- */
+function renderTable(title, tips) {
+  const container = document.getElementById('tablesContainer');
 
-      const rows = Array.from(table.querySelectorAll('tbody tr'));
-      const tipsToSave = rows.map(r => {
-        const inputs = r.querySelectorAll('td input');
-        return {
-          matchup: inputs[0].value.trim(),
-          prediction: inputs[1].value.trim(),
-          time: inputs[2].value.trim(),
-          odds: inputs[3].value.trim(),
-          rating: inputs[4].value.trim(),
-          result: r.querySelector('select').value
-        };
-      });
+  const col = document.createElement('div');
+  col.className = 'col-12';
 
-      db.ref(`tips/${todayKey}/${tableTitle}`).set({ tips: tipsToSave });
-    }
+  const card = document.createElement('div');
+  card.className = 'card shadow';
 
-    function deleteRow(button) {
-      const row = button.closest('tr');
-      row.remove();
-    }
+  /* header */
+  const body = document.createElement('div');
+  body.className = 'card-body';
 
-    function deleteTable(title, element) {
-      if (!confirm(`Delete table "${title}"?`)) return;
-      db.ref(`tips/${todayKey}/${title}`).remove().then(() => {
-        element.remove();
-        alert(`"${title}" deleted successfully.`);
-      });
-    }
+  const header = document.createElement('div');
+  header.className = 'table-title';
+  header.textContent = title;
 
-    function generateTable() {
-      const title = document.getElementById('tableTitle').value.trim();
-      const input = document.getElementById('inputData').value.trim();
-      if (!title || !input) {
-        alert("Please enter both a title and predictions.");
-        return;
-      }
+  const delBtn = document.createElement('button');
+  delBtn.className = 'btn btn-danger btn-sm float-end';
+  delBtn.textContent = '🗑 Delete Table';
+  delBtn.addEventListener('click', () => deleteTable(title, col));
 
-      const lines = input.split('\n');
-      const tips = [];
-      for (const line of lines) {
-        const parts = line.split('\t');
-        const [matchup = '', prediction = '', time = '', odds = '', rating = ''] = parts;
-        tips.push({ matchup, prediction, time, odds, rating, result: "" });
-      }
+  header.appendChild(delBtn);
+  body.appendChild(header);
 
-      // Safe time sort (handles missing time)
-      tips.sort((a, b) => {
-        const timeA = (a.time || "").padStart(5, '0');
-        const timeB = (b.time || "").padStart(5, '0');
-        return timeA.localeCompare(timeB);
-      });
+  /* table */
+  const table = document.createElement('table');
+  table.className = 'table table-bordered table-hover mt-3';
+  table.innerHTML = `
+    <caption class="text-center fw-bold">${title}</caption>
+    <thead class="table-dark"><tr>
+      <th>Match</th><th>Tip</th><th>Time</th><th>Odds</th>
+      <th class="text-center">Result</th><th>Delete</th>
+    </tr></thead><tbody></tbody>`;
+  const tbody = table.querySelector('tbody');
 
-      db.ref(`tips/${todayKey}/${title}`).set({ tips }).then(() => {
-        alert(`"${title}" saved successfully.`);
-        document.getElementById('inputData').value = "";
-        document.getElementById('tableTitle').value = "";
-        loadSavedTables();
-      });
-    }
+  tips.forEach(t => {
+    const tr = document.createElement('tr');
+    if (t.result === 'right') tr.classList.add('right');
+    if (t.result === 'wrong') tr.classList.add('wrong');
+    tr.innerHTML = `
+      <td><input type="text" class="form-control form-control-sm" value="${t.matchup}"></td>
+      <td><input type="text" class="form-control form-control-sm" value="${t.prediction}"></td>
+      <td><input type="text" class="form-control form-control-sm" value="${t.time}"></td>
+      <td><input type="text" class="form-control form-control-sm" value="${t.odds}"></td>
+      <td class="text-center">
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" data-value="right" ${t.result === 'right' ? 'checked' : ''}>
+          <label class="form-check-label">✔</label>
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" data-value="wrong" ${t.result === 'wrong' ? 'checked' : ''}>
+          <label class="form-check-label">✖</label>
+        </div>
+      </td>
+      <td><button class="btn btn-sm btn-outline-danger">🗑</button></td>`;
 
-    function renderTable(title, tips) {
-      const container = document.getElementById('tablesContainer');
-      const col = document.createElement('div');
-      col.className = 'col-12';
+    /* ✔ / ✖ result listeners */
+    tr.querySelector('input[data-value="right"]').addEventListener('change', updateCheckboxResult);
+    tr.querySelector('input[data-value="wrong"]').addEventListener('change', updateCheckboxResult);
 
-      const card = document.createElement('div');
-      card.className = 'card shadow';
+    /* NEW: live-save when text cells change */
+    tr.querySelectorAll('input[type="text"]').forEach(inp =>
+      inp.addEventListener('change', () => saveTable(table, title)));
 
-      const cardBody = document.createElement('div');
-      cardBody.className = 'card-body';
+    /* row delete + live-save */
+    tr.querySelector('button').addEventListener('click', e => {
+      deleteRow(e.target);
+      saveTable(table, title);
+    });
 
-      const titleHeader = document.createElement('div');
-      titleHeader.className = 'table-title';
-      titleHeader.textContent = title;
+    tbody.appendChild(tr);
+  });
 
-      const delBtn = document.createElement('button');
-      delBtn.className = 'btn btn-danger btn-sm float-end';
-      delBtn.textContent = '🗑 Delete Table';
-      delBtn.onclick = () => deleteTable(title, col);
+  body.appendChild(table);
+  card.appendChild(body);
+  col.appendChild(card);
+  container.appendChild(col);
+}
 
-      titleHeader.appendChild(delBtn);
-      cardBody.appendChild(titleHeader);
-
-      const table = document.createElement('table');
-      table.className = 'table table-bordered table-hover mt-3';
-      table.innerHTML = `
-        <caption class="text-center fw-bold">${title}</caption>
-        <thead class="table-dark">
-          <tr>
-            <th>Match</th>
-            <th>Prediction</th>
-            <th>Time</th>
-            <th>Odds</th>
-            <th>Rating</th>
-            <th>Result</th>
-            <th>Delete</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      `;
-
-      const tbody = table.querySelector('tbody');
-      tips.forEach(tip => {
-        const tr = document.createElement('tr');
-        if (tip.result === 'right') tr.classList.add('right');
-        if (tip.result === 'wrong') tr.classList.add('wrong');
-
-        tr.innerHTML = `
-          <td><input type="text" class="form-control form-control-sm" value="${tip.matchup || ''}"></td>
-          <td><input type="text" class="form-control form-control-sm" value="${tip.prediction || ''}"></td>
-          <td><input type="text" class="form-control form-control-sm" value="${tip.time || ''}"></td>
-          <td><input type="text" class="form-control form-control-sm" value="${tip.odds || ''}"></td>
-          <td><input type="text" class="form-control form-control-sm" value="${tip.rating || ''}"></td>
-          <td>
-            <select class="form-select form-select-sm" onchange="updateResult(this)">
-              <option value="">--</option>
-              <option value="right" ${tip.result === 'right' ? 'selected' : ''}>✔ Right</option>
-              <option value="wrong" ${tip.result === 'wrong' ? 'selected' : ''}>✖ Wrong</option>
-            </select>
-          </td>
-          <td><button class="btn btn-sm btn-outline-danger" onclick="deleteRow(this)">🗑</button></td>
-        `;
-        tbody.appendChild(tr);
-      });
-
-      cardBody.appendChild(table);
-      card.appendChild(cardBody);
-      col.appendChild(card);
-      container.appendChild(col);
-    }
-
-    function loadSavedTables() {
-      const container = document.getElementById('tablesContainer');
-      container.innerHTML = "";
-
-      db.ref(`tips/${todayKey}`).orderByKey().once('value').then(snapshot => {
-        const data = snapshot.val();
-        if (!data) return;
-
-        const entries = Object.entries(data).reverse();
-        entries.forEach(([title, entry]) => {
-          if (entry.tips) renderTable(title, entry.tips);
-        });
-      });
-    }
-
-    window.onload = loadSavedTables;
-  </script>
+/* ---------- load saved ---------- */
+function loadSavedTables() {
+  document.getElementById('tablesContainer').innerHTML = "";
+  db.ref(`tips/${todayKey}`).orderByKey().once('value').then(snap => {
+    const data = snap.val();
+    if (!data) return;
+    Object.entries(data).reverse().forEach(([title, { tips }]) => {
+      if (tips) renderTable(title, tips);
+    });
+  });
+}
+window.onload = loadSavedTables;
+</script>
 </body>
 </html>
