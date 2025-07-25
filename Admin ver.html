@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Panel - Verify Subscriptions</title>
+  <style>
+    body { font-family: Arial; background: #f7f7f7; padding: 20px; }
+    .box { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; }
+    h2 { text-align: center; }
+    .user { border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 8px; position: relative; }
+    .user input[type="checkbox"] { position: absolute; top: 10px; left: 10px; }
+    button { padding: 10px 20px; margin-top: 10px; background: green; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    button:hover { background: darkgreen; }
+    #deleteBtn { background: red; margin-bottom: 20px; }
+    #deleteBtn:hover { background: darkred; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>Pending Subscription Verifications</h2>
+    <button id="deleteBtn">🗑️ Delete Selected</button>
+    <div id="userList">Loading...</div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import {
+      getDatabase, ref, onValue, update, remove
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAKtfTZ5j3KYvHynIV5vfNKpclbEmrU794",
+      authDomain: "community-caa4a.firebaseapp.com",
+      databaseURL: "https://community-caa4a-default-rtdb.firebaseio.com",
+      projectId: "community-caa4a",
+      storageBucket: "community-caa4a.appspot.com",
+      messagingSenderId: "51051822203",
+      appId: "1:51051822203:web:0cd43a4e1f23594f0a36de",
+      measurementId: "G-MC69F9YXC3"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const userList = document.getElementById('userList');
+    const deleteBtn = document.getElementById('deleteBtn');
+
+    const subsRef = ref(db, 'subscriptions');
+
+    onValue(subsRef, (snapshot) => {
+      const data = snapshot.val();
+      userList.innerHTML = '';
+
+      if (!data) {
+        userList.innerHTML = '<p>No subscriptions found.</p>';
+        return;
+      }
+
+      let count = 0;
+
+      for (const phone in data) {
+        const sub = data[phone];
+
+        if (!sub.verified) {
+          count++;
+          const div = document.createElement('div');
+          div.className = 'user';
+          div.innerHTML = `
+            <input type="checkbox" class="selectUser" value="${phone}">
+            <strong>Name:</strong> ${sub.name}<br>
+            <strong>Phone:</strong> ${sub.phone}<br>
+            <strong>Duration:</strong> ${sub.duration} hour(s)<br>
+            <button onclick="verify('${phone}')">✅ Verify</button>
+          `;
+          userList.appendChild(div);
+        }
+      }
+
+      if (count === 0) {
+        userList.innerHTML = '<p>No unverified submissions.</p>';
+      }
+    });
+
+    window.verify = async function(phone) {
+      const subRef = ref(db, `subscriptions/${phone}`);
+      await update(subRef, { verified: true });
+      alert(`Verified ${phone}`);
+    };
+
+    deleteBtn.addEventListener('click', async () => {
+      const checkboxes = document.querySelectorAll('.selectUser:checked');
+      if (checkboxes.length === 0) {
+        alert("No subscriptions selected.");
+        return;
+      }
+
+      if (!confirm(`Are you sure you want to delete ${checkboxes.length} subscription(s)?`)) return;
+
+      for (const box of checkboxes) {
+        const phone = box.value;
+        const subRef = ref(db, `subscriptions/${phone}`);
+        await remove(subRef);
+      }
+
+      alert("Selected subscriptions deleted.");
+    });
+  </script>
+</body>
+</html>

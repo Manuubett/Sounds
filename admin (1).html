@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Dashboard – Page Visitors</title>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAKtfTZ5j3KYvHynIV5vfNKpclbEmrU794",
+      authDomain: "community-caa4a.firebaseapp.com",
+      databaseURL: "https://community-caa4a-default-rtdb.firebaseio.com",
+      projectId: "community-caa4a",
+      storageBucket: "community-caa4a.appspot.com",
+      messagingSenderId: "51051822203",
+      appId: "1:51051822203:web:0cd43a4e1f23594f0a36de",
+      measurementId: "G-MC69F9YXC3"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const counterRef = ref(db, 'page_visits');
+
+    // Show live count
+    onValue(counterRef, (snapshot) => {
+      const count = snapshot.val();
+      document.getElementById('visitorCount').innerText = count || 0;
+    });
+
+    // Reset counter function
+    window.resetVisitorCount = async () => {
+      await set(counterRef, 0);
+      alert("Visitor count reset to 0.");
+    };
+
+    // Redirect to admin panel
+    window.goToAdmin = () => {
+      window.location.href = "Admin ver.html"; // Change this to your actual admin panel URL
+    };
+  </script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      padding: 40px;
+      text-align: center;
+    }
+    h1 {
+      color: #333;
+    }
+    .count-box {
+      background: white;
+      border-radius: 10px;
+      padding: 40px;
+      margin-top: 20px;
+      display: inline-block;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .count-number {
+      font-size: 3em;
+      color: #2a5298;
+      margin-top: 10px;
+    }
+    .button-group {
+      margin-top: 30px;
+    }
+    .button-group button {
+      margin: 10px;
+      padding: 12px 24px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    .reset-btn {
+      background-color: #e74c3c;
+      color: white;
+    }
+    .admin-btn {
+      background-color: #2a5298;
+      color: white;
+    }
+    .reset-btn:hover {
+      background-color: #c0392b;
+    }
+    .admin-btn:hover {
+      background-color: #1e3f75;
+    }
+  </style>
+</head>
+<body>
+  <h1>🛠️ Admin Dashboard</h1>
+  <div class="count-box">
+    <p>Total Page Visits</p>
+    <div class="count-number" id="visitorCount">Loading...</div>
+  </div>
+
+  <div class="button-group">
+    <button class="reset-btn" onclick="resetVisitorCount()">🔁 Reset Count</button>
+    <button class="admin-btn" onclick="goToAdmin()">🔐 Go to Admin Panel</button>
+  </div>
+</body>
+</html>
